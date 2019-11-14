@@ -1,0 +1,10 @@
+{
+	"files.associations": {
+		"*.clp": "jess",
+		"*.jjt": "java",
+		"*.vdmpp": "java",
+		"*.html": "html",
+		"*.pug": "jade",
+		"algorithm": "cpp"
+	}
+}
