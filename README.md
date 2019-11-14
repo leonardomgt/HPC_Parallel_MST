@@ -1,1 +1,2 @@
-# HPC_Parallel_MST
+# HPC
+## Parallel MST
