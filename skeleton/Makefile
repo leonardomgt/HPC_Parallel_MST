@@ -2,11 +2,11 @@ CC = mpicc
 CXX = mpic++
 CFLAGS = -Wall -Wextra -O3 -g
 NP = 1
-FILE = data/test_sm.mtx
+FILE = ../data/test_sm.mtx
 
 all:	main
 
-main:	main.o mmio.o matrix.o sparse.o
+main:	mmio.o matrix.o sparse.o graph.o main.o 
 	$(CXX) $(CFLAGS) -o $@ $^ -lrt
 
 

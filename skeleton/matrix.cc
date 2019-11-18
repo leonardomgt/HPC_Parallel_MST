@@ -16,14 +16,6 @@ extern "C"
  * Load matrix market file
  */
 
-struct Element
-{
-	int row, col;
-	double val;
-
-	Element(int row, int col, double val) : row(row), col(col), val(val) {}
-};
-
 inline bool operator==(const struct Element &a, const struct Element &b)
 {
 	return a.row == b.row && a.col == b.col && a.val == b.val;
@@ -45,10 +37,9 @@ inline bool operator<(const struct Element &a, const struct Element &b)
 	return false;
 }
 
-static bool
-read_matrix_market(const char *filename,
-				   std::vector<Element> &elements,
-				   int &n_rows, int &n_cols)
+bool read_matrix_market(const char *filename,
+						std::vector<Element> &elements,
+						int &n_rows, int &n_cols)
 {
 	FILE *fh = fopen(filename, "r");
 	if (!fh)
@@ -178,6 +169,12 @@ bool load_matrix_market(const char *filename,
 
 	if (elements.size() >= (size_t)max_n_elements || n_rows >= max_n_rows)
 		return false;
+
+	for (size_t i = 0; i < elements.size(); i++)
+	{
+		Element elem = elements.at(i);
+		printf("ELEMENT: (%d, %d, %f)\n", elem.row, elem.col, elem.val);
+	}
 
 	nnz = elements.size();
 	load_elements(elements, values, col_ind, row_ptr_begin, row_ptr_end);
