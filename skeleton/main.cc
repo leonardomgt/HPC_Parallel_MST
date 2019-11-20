@@ -10,25 +10,26 @@
 
 using namespace std;
 
-/* Global variables holding the matrix data. To complete this assignment
- * you are requested to only use arrays and access these arrays with
- * subscripts. Do not use pointers.
- */
-
-const int max_n_elements = 131072;
-const int max_n_rows = 16384;
-
-// vector<vector<int>> initialSetupMST(int n_nodes);
-// void printGroupSets(vector<vector<int>> group_sets);
+// * Sequential vs Parallel Boruvka's algorithm
 Graph mst_sequential(const Graph &graph);
 Graph mst_parallel(const Graph &graph);
+
+// * Find the root of a vertex in the MST forest.
 int find_root(unordered_map<int, int> &mst_i, int vertex);
 int find_root(int *mst_forest, int vertex);
+
+// * Contract two subtrees into one in the MST forest.
 bool contract_subtrees(unordered_map<int, int> &mst_i, int root1, int root2);
 void contract_subtrees(int *mst_forest, int root1, int root2);
-MPI_Datatype create_edge_MPI_datatype();
+
+// * Add a new edge to a Graph.
 void add_edge_to_graph(Graph &graph, Edge edge);
+
+// * Merge two arrays of Edges keeping the best one for each MST subtree.
 void merge_minimum_edges(Edge *edges, Edge *edges_rcv, int n_nodes);
+
+// * Create new MPI datatype: MPI_EDGE
+MPI_Datatype create_edge_MPI_datatype();
 
 int main(int argc, char **argv)
 {
@@ -42,17 +43,15 @@ int main(int argc, char **argv)
 	// * Initalize MPI Library
 	MPI_Init(&argc, &argv);
 
-	int n_procs;
+	int n_procs, id;
 	MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
-
-	int id;
 	MPI_Comm_rank(MPI_COMM_WORLD, &id);
 
-	printf("\n\nN_PROCESSOS: %d\n", n_procs);
-	printf("ID: %d\n\n", id);
+	printf("ID: %d\n", id);
 
 	Graph graph;
 
+	// * Load the graph to the root process (ID = 0)
 	if (id == 0)
 	{
 		double start_reading = MPI_Wtime();
@@ -71,8 +70,10 @@ int main(int argc, char **argv)
 
 		// print_graph(graph);
 	}
+
 	double start_exec = MPI_Wtime();
 
+	// * Execute the Boruvka's algorithm.
 	// Graph mst = mst_sequential(graph);
 	Graph mst = mst_parallel(graph);
 
@@ -80,7 +81,7 @@ int main(int argc, char **argv)
 
 	if (id == 0)
 	{
-		printf("Execution complete in %f s\n", start_exec - end_exec);
+		printf("Execution complete in %f s\n", end_exec - start_exec);
 		// print_graph(mst);
 		print_graph_info(mst);
 	}
@@ -384,71 +385,3 @@ void contract_subtrees(int *mst_forest, int root1, int root2)
 {
 	mst_forest[root1] = root2;
 }
-
-// vector<vector<int>> initialSetupMST(int n_nodes)
-// {
-// 	vector<vector<int>> result;
-
-// 	for (int i = 0; i < n_nodes; i += 2)
-// 	{
-// 		vector<int> node;
-// 		node.push_back(i);
-// 		node.push_back(i + 1);
-// 		result.push_back(node);
-// 	}
-
-// 	return result;
-// }
-
-// void printGroupSets(vector<vector<int>> group_sets)
-// {
-// 	for (size_t i = 0; i < group_sets.size(); i++)
-// 	{
-// 		printf("Set %lu: {", i);
-// 		for (size_t j = 0; j < group_sets.at(i).size(); j++)
-// 		{
-// 			printf("%d, ", group_sets.at(i).at(j));
-// 		}
-// 		printf("}\n");
-// 	}
-// 	printf("\n");
-// }
-/*
-int main(int argc, char *argv[])
-{
-	int n, myid, numprocs, i;
-	double PI25DT = 3.141592653589793238462643;
-	double mypi, pi, h, sum, x;
-	MPI_Init(&argc, &argv);
-	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
-	MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-
-	for (size_t j = 1; j < 1000000; j *= 2)
-	{
-		// if (myid == 0)
-		// {
-		// 	printf("Enter number of intervals: (0 quits)");
-		// 	scanf("%d", &n);
-		// }
-		n = j;
-		MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		if (n == 0)
-			break;
-		h = 1.0 / (double)n;
-		sum = 0.0;
-		for (i = myid + 1; i <= n; i += numprocs)
-		{
-			x = h * ((double)i - 0.5);
-			sum += 4.0 / (1.0 + x * x);
-		}
-		mypi = h * sum;
-		MPI_Reduce(&mypi, &pi, 1, MPI_DOUBLE, MPI_SUM, 0,
-				   MPI_COMM_WORLD);
-		if (myid == 0)
-			printf("pi = approximately %.16f, Error is %.16f\n",
-				   pi, fabs(pi - PI25DT));
-	}
-	MPI_Finalize();
-	return 0;
-}
-*/

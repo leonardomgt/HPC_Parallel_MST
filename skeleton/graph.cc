@@ -20,6 +20,7 @@ bool load_graph(const char *filename, Graph &graph)
 	graph.edges = new Edge[graph.n_edges];
 
 	memcpy(graph.edges, vectorElems.data(), graph.n_edges * sizeof(Edge));
+
 	return true;
 }
 
