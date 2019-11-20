@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <time.h>
+#include <math.h>
 
 using namespace std;
 
@@ -20,112 +21,232 @@ const int max_n_rows = 16384;
 // vector<vector<int>> initialSetupMST(int n_nodes);
 // void printGroupSets(vector<vector<int>> group_sets);
 Graph mst_sequential(const Graph &graph);
+Graph mst_parallel(const Graph &graph);
 int find_root(unordered_map<int, int> &mst_i, int vertex);
+int find_root(int *mst_forest, int vertex);
 bool contract_subtrees(unordered_map<int, int> &mst_i, int root1, int root2);
+void contract_subtrees(int *mst_forest, int root1, int root2);
+MPI_Datatype create_edge_MPI_datatype();
+void add_edge_to_graph(Graph &graph, Edge edge);
+void merge_minimum_edges(Edge *edges, Edge *edges_rcv, int n_nodes);
 
 int main(int argc, char **argv)
 {
-
-	// // * Initalize MPI Library
-
-	// MPI_Init(&argc, &argv);
-
-	// int n_procs;
-	// MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
-
-	// int id;
-	// MPI_Comm_rank(MPI_COMM_WORLD, &id);
-
-	// printf("\n\nN_PROCESSOS: %d\n", n_procs);
-	// printf("ID: %d\n\n", id);
+	int *test = new int[5];
+	for (size_t i = 0; i < 5; i++)
+	{
+		printf("Elem %lu: %d", i, test[i]);
+	}
 
 	// * Check arguments
 	if (argc != 2)
 	{
 		fprintf(stderr, "usage: %s <filename>\n", argv[0]);
-		return -1;
+		exit(EXIT_FAILURE);
 	}
+
+	// * Initalize MPI Library
+	MPI_Init(&argc, &argv);
+
+	int n_procs;
+	MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
+
+	int id;
+	MPI_Comm_rank(MPI_COMM_WORLD, &id);
+
+	printf("\n\nN_PROCESSOS: %d\n", n_procs);
+	printf("ID: %d\n\n", id);
 
 	Graph graph;
 
-	clock_t begin = clock();
-
-	bool ok = load_graph(argv[1], graph);
-	if (!ok)
+	if (id == 0)
 	{
-		fprintf(stderr, "failed to load matrix.\n");
-		return -1;
+
+		bool ok = load_graph(argv[1], graph);
+		if (!ok)
+		{
+			fprintf(stderr, "Failed to load graph.\n");
+			return -1;
+		}
+
+		print_graph(graph);
 	}
 
-	clock_t end = clock();
-	double time_read = (double)(end - begin) / CLOCKS_PER_SEC;
-
-	printf("Reading time: %f sec\n", time_read);
-
-	print_graph(graph);
-
-	begin = clock();
-
-	Graph mst = mst_sequential(graph);
-
-	end = clock();
-	double time_execute = (double)(end - begin) / CLOCKS_PER_SEC;
-
-	printf("Execution time: %f sec\n", time_execute);
+	// Graph mst = mst_sequential(graph);
+	Graph mst = mst_parallel(graph);
 
 	print_graph(mst);
 	printf("\nTotal MST weight: %f\n", total_mst_weight(mst));
 
-	// vector<vector<int>> group_sets = initialSetupMST(matrix.n_rows);
-
-	// printGroupSets(group_sets);
-
-	// for (size_t i = 0; i < group_sets.size(); i++)
-	// {
-	// 	vector<int> group_set = group_sets.at(i);
-
-	// 	double minWeight = numeric_limits<double>::max();
-	// 	int minSrc = -1, minDest = -1;
-
-	// 	for (size_t j = 0; j < group_set.size(); j++)
-	// 	{
-	// 		int row = group_set.at(j);
-
-	// 		for (int idx = matrix.row_ptr_begin[row]; idx <= matrix.row_ptr_end[row]; ++idx)
-	// 		{
-	// 			if (matrix.values[idx] < minWeight)
-	// 			{
-	// 				minWeight = matrix.values[idx];
-	// 				minSrc = row;
-	// 				minDest = matrix.col_ind[idx];
-	// 			}
-
-	// 			printf("Value (%d, %d): %f\n", row, matrix.col_ind[idx], matrix.values[idx]);
-	// 		}
-	// 	}
-	// 	printf("MinWeight (%d, %d): %f\n\n", minSrc, minDest, minWeight);
-	// }
-
-	// vector<int> a = {1, 3, 5, 6, 9};
-	// vector<int> b = {2, 3, 6, 7, 9};
-	// vector<int> r(a.size() + b.size());
-
-	// vector<int>::iterator it = set_union(a.begin(), a.end(), b.begin(), b.end(), r.begin());
-	// r.resize(it - r.begin());
-
-	// printf("Size: %lu\n", r.size());
-	// for (size_t i = 0; i < r.size(); i++)
-	// {
-	// 	printf("%lu: %d\n", i, r.at(i));
-	// }
-
-	// MPI_Finalize();
+	MPI_Finalize();
 	return 0;
+}
+
+Graph mst_parallel(const Graph &graph)
+{
+	Graph mst_result(graph.n_nodes, graph.n_nodes - 1);
+
+	int id;
+	MPI_Comm_rank(MPI_COMM_WORLD, &id);
+
+	int n_procs;
+	MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
+
+	int n_nodes;
+	int n_edges;
+
+	if (id == 0)
+	{
+		n_nodes = graph.n_nodes;
+		n_edges = graph.n_edges;
+	}
+
+	// * Broadcast the number of edges and nodes in the original graph.
+	MPI_Bcast(&n_nodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&n_edges, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+	// * Maps <original_node, parent> as a tree (mst_i stands for intermediate minimum spanning tree)
+
+	int *mst_forest = new int[n_nodes];
+
+	if (id == 0)
+	{
+		for (int i = 0; i < n_nodes; i++)
+		{
+			mst_forest[i] = i;
+		}
+	}
+
+	int edgesPerProcess = (n_edges + n_procs - 1) / n_procs;
+
+	Edge *processPart = new Edge[edgesPerProcess];
+
+	MPI_Datatype MPI_EDGE = create_edge_MPI_datatype();
+
+	MPI_Scatter(
+		graph.edges,
+		edgesPerProcess, MPI_EDGE,
+		processPart,
+		edgesPerProcess, MPI_EDGE,
+		0, MPI_COMM_WORLD);
+
+	// * Adjust edgesPerProcess for the last process.
+	if (id == n_procs - 1)
+		edgesPerProcess = n_edges % edgesPerProcess;
+
+	// * Process 0 initializes nSubtrees and broadcast to the others.
+	int nSubtrees = graph.n_nodes;
+	MPI_Bcast(&nSubtrees, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+	int last_nSubtrees = 0;
+
+	while (nSubtrees > 1 && last_nSubtrees != nSubtrees)
+	{
+		last_nSubtrees = nSubtrees;
+
+		// * Broadcast the mst_forest.
+		MPI_Bcast(mst_forest, n_nodes, MPI_INT, 0, MPI_COMM_WORLD);
+
+		// * Maps <super_node, minimum_edge>
+		Edge *minimum_edge = new Edge[n_nodes];
+
+		// * Iterate through edges
+		for (int i = 0; i < edgesPerProcess; i++)
+		{
+			Edge edge = processPart[i];
+
+			int rootSrc = find_root(mst_forest, edge.row);
+			int rootDest = find_root(mst_forest, edge.col);
+
+			// * If source and destination have the same root, they're already contracted. Continue.
+			if (rootSrc == rootDest)
+				continue;
+
+			if (minimum_edge[rootSrc].isInvalid() || edge.val < minimum_edge[rootSrc].val)
+			{
+				minimum_edge[rootSrc] = edge;
+			}
+		}
+
+		Edge *minimum_edge_rcv = new Edge[n_nodes];
+		MPI_Status status;
+
+		for (size_t k = 1; k <= ceil(log2(n_procs)); k++)
+		{
+			if (id % (int)pow(2, k) == pow(2, k - 1))
+			{
+				printf("Id %d sending to %f\n", id, id - pow(2, k - 1));
+				MPI_Send(minimum_edge, n_nodes, MPI_EDGE, id - pow(2, k - 1), k, MPI_COMM_WORLD);
+			}
+			else if (id % (int)pow(2, k) == 0 && id + pow(2, k - 1) < n_procs)
+			{
+				printf("Id %d receiving from %f\n", id, id + pow(2, k - 1));
+				MPI_Recv(minimum_edge_rcv, n_nodes, MPI_EDGE, id + pow(2, k - 1), k, MPI_COMM_WORLD, &status);
+
+				merge_minimum_edges(minimum_edge, minimum_edge_rcv, n_nodes);
+			}
+		}
+
+		if (id == 0)
+		{
+			for (int i = 0; i < n_nodes; i++)
+			{
+				Edge edge = minimum_edge[i];
+				// printf("MIN_EDGE FINAL i = %d: E(%d, %d, %f)\n", i, edge.row, edge.col, edge.val);
+
+				int rootSrc = find_root(mst_forest, edge.row);
+				int rootDest = find_root(mst_forest, edge.col);
+
+				if (rootSrc != rootDest)
+				{
+					add_edge_to_graph(mst_result, edge);
+
+					contract_subtrees(mst_forest, rootSrc, rootDest);
+					nSubtrees--;
+				}
+			}
+		}
+
+		// * Broadcast nSubtrees
+		MPI_Bcast(&nSubtrees, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	}
+
+	return mst_result;
+}
+
+void merge_minimum_edges(Edge *edges, Edge *edges_rcv, int n_nodes)
+{
+	for (int i = 0; i < n_nodes; i++)
+	{
+		Edge edge = edges[i];
+		Edge edge_rcv = edges_rcv[i];
+
+		if (edge_rcv.isInvalid())
+			continue;
+
+		else if (edge.isInvalid() || edge_rcv.val < edge.val)
+		{
+			edges[i] = edge_rcv;
+		}
+	}
+}
+
+MPI_Datatype create_edge_MPI_datatype()
+{
+	int blockcount[3] = {1, 1, 1};
+	MPI_Aint offsets[3] = {offsetof(Edge, row), offsetof(Edge, col), offsetof(Edge, val)};
+	MPI_Datatype EdgeElementTypes[3] = {MPI_INT, MPI_INT, MPI_DOUBLE};
+	MPI_Datatype MPI_EDGE;
+
+	MPI_Type_create_struct(3, blockcount, offsets, EdgeElementTypes, &MPI_EDGE);
+	MPI_Type_commit(&MPI_EDGE);
+
+	return MPI_EDGE;
 }
 
 Graph mst_sequential(const Graph &graph)
 {
-	Graph mst_result(graph.n_nodes);
+	Graph mst_result(graph.n_nodes, graph.n_nodes - 1);
 
 	// * Maps <original_node, parent> as a tree (mst_i stands for intermediate minimum spanning tree)
 	unordered_map<int, int> mst_i;
@@ -147,9 +268,9 @@ Graph mst_sequential(const Graph &graph)
 		unordered_map<int, Edge> minimum_edge;
 
 		// * Iterate all the edges
-		for (size_t i = 0; i < graph.edges.size(); i++)
+		for (int i = 0; i < graph.n_edges; i++)
 		{
-			Edge edge = graph.edges.at(i);
+			Edge edge = graph.edges[i];
 
 			int rootSrc = find_root(mst_i, edge.row);
 			int rootDest = find_root(mst_i, edge.col);
@@ -186,7 +307,8 @@ Graph mst_sequential(const Graph &graph)
 
 			if (rootSrc != rootDest)
 			{
-				mst_result.edges.push_back(it->second);
+				add_edge_to_graph(mst_result, it->second);
+
 				if (contract_subtrees(mst_i, rootSrc, rootDest))
 					nSubtrees--;
 			}
@@ -202,12 +324,26 @@ Graph mst_sequential(const Graph &graph)
 	return mst_result;
 }
 
+void add_edge_to_graph(Graph &graph, Edge edge)
+{
+	graph.edges[graph.n_edges] = edge;
+	graph.n_edges++;
+}
+
 int find_root(unordered_map<int, int> &mst_i, int vertex)
 {
-	if (mst_i.at(vertex) == vertex)
-		return vertex;
-	else
-		return find_root(mst_i, mst_i.at(vertex));
+	if (mst_i.at(vertex) != vertex)
+		mst_i.find(vertex)->second = find_root(mst_i, mst_i.at(vertex));
+
+	return mst_i.at(vertex);
+}
+
+int find_root(int *mst_forest, int vertex)
+{
+	if (mst_forest[vertex] != vertex)
+		mst_forest[vertex] = find_root(mst_forest, mst_forest[vertex]);
+
+	return mst_forest[vertex];
 }
 
 bool contract_subtrees(unordered_map<int, int> &mst_i, int root1, int root2)
@@ -222,6 +358,11 @@ bool contract_subtrees(unordered_map<int, int> &mst_i, int root1, int root2)
 	}
 
 	return false;
+}
+
+void contract_subtrees(int *mst_forest, int root1, int root2)
+{
+	mst_forest[root1] = root2;
 }
 
 // vector<vector<int>> initialSetupMST(int n_nodes)

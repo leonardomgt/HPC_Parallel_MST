@@ -1,6 +1,12 @@
 {
 	"files.associations": {
-		"*.tpp": "cpp"
+		"*.clp": "jess",
+		"*.jjt": "java",
+		"*.vdmpp": "java",
+		"*.html": "html",
+		"*.pug": "jade",
+		"*.tpp": "cpp",
+		"limits": "cpp"
 	},
 	"terminal.integrated.shell.windows": "cmd.exe",
 	"C_Cpp.default.intelliSenseMode": "clang-x64"

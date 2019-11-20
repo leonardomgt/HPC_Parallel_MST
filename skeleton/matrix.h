@@ -3,12 +3,16 @@
 
 #include <vector>
 
+const int INVALID_VALUE = -1;
+
 struct Element
 {
 	int row, col;
 	double val;
 
+	Element() : row(INVALID_VALUE), col(INVALID_VALUE) {}
 	Element(int row, int col, double val) : row(row), col(col), val(val) {}
+	bool isInvalid() { return row == INVALID_VALUE || col == INVALID_VALUE; }
 };
 
 bool read_matrix_market(const char *filename,
