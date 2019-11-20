@@ -69,15 +69,13 @@ int main(int argc, char **argv)
 			return -1;
 		}
 
-		print_graph(graph);
+		// print_graph(graph);
 	}
 
 	// Graph mst = mst_sequential(graph);
 	Graph mst = mst_parallel(graph);
 
-	print_graph(mst);
-	printf("\nTotal MST weight: %f\n", total_mst_weight(mst));
-
+	print_graph_info(mst);
 	MPI_Finalize();
 	return 0;
 }

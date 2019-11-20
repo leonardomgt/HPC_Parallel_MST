@@ -55,3 +55,10 @@ double total_mst_weight(const Graph &graph)
 
 	return sum;
 }
+
+void print_graph_info(const Graph &graph)
+{
+	printf("\nNum nodes: %d\n", graph.n_nodes);
+	printf("Num edges: %d\n", graph.n_edges);
+	printf("Total MST weight: %f\n\n", total_mst_weight(graph));
+}
