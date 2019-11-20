@@ -1,0 +1,9 @@
+ID: 0
+Reading matrix '/var/scratch/hpcl1918/ldoor/ldoor.mtx'...
+Reading complete in 22.610740 s
+Execution complete in 4.164801 s
+
+Num nodes: 952203
+Num edges: 952202
+Total MST weight: -339878991545.884644
+

@@ -1,0 +1,10 @@
+ID: 0
+ID: 1
+Reading matrix '/var/scratch/hpcl1918/mouse_gene/mouse_gene.mtx'...
+Reading complete in 15.845499 s
+Execution complete in 1.212624 s
+
+Num nodes: 45101
+Num edges: 43029
+Total MST weight: 1097.834880
+

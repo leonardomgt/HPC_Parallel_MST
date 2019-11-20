@@ -1,0 +1,12 @@
+ID: 0
+ID: 3
+ID: 1
+Reading matrix '/var/scratch/hpcl1918/nlpkkt240/nlpkkt240.mtx'...
+ID: 2
+Reading complete in 335.181854 s
+Execution complete in 12.785144 s
+
+Num nodes: 27993600
+Num edges: 27993599
+Total MST weight: -447897576.000000
+
