@@ -1,6 +1,6 @@
 CC = mpicc
 CXX = mpic++
-CFLAGS = -Wall -Wextra -O3 -g
+CFLAGS = -Wall -Wextra -g
 NP = 2
 FILE = ../data/test_sm.mtx
 

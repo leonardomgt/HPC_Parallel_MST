@@ -32,12 +32,6 @@ void merge_minimum_edges(Edge *edges, Edge *edges_rcv, int n_nodes);
 
 int main(int argc, char **argv)
 {
-	int *test = new int[5];
-	for (size_t i = 0; i < 5; i++)
-	{
-		printf("Elem %lu: %d", i, test[i]);
-	}
-
 	// * Check arguments
 	if (argc != 2)
 	{
@@ -61,8 +55,14 @@ int main(int argc, char **argv)
 
 	if (id == 0)
 	{
+		double start_reading = MPI_Wtime();
 
 		bool ok = load_graph(argv[1], graph);
+
+		double end_reading = MPI_Wtime();
+
+		printf("Reading complete in %f s\n", end_reading - start_reading);
+
 		if (!ok)
 		{
 			fprintf(stderr, "Failed to load graph.\n");
@@ -71,19 +71,26 @@ int main(int argc, char **argv)
 
 		// print_graph(graph);
 	}
+	double start_exec = MPI_Wtime();
 
 	// Graph mst = mst_sequential(graph);
 	Graph mst = mst_parallel(graph);
 
-	print_graph_info(mst);
+	double end_exec = MPI_Wtime();
+
+	if (id == 0)
+	{
+		printf("Execution complete in %f s\n", start_exec - end_exec);
+		// print_graph(mst);
+		print_graph_info(mst);
+	}
+
 	MPI_Finalize();
 	return 0;
 }
 
 Graph mst_parallel(const Graph &graph)
 {
-	Graph mst_result(graph.n_nodes, graph.n_nodes - 1);
-
 	int id;
 	MPI_Comm_rank(MPI_COMM_WORLD, &id);
 
@@ -102,6 +109,8 @@ Graph mst_parallel(const Graph &graph)
 	// * Broadcast the number of edges and nodes in the original graph.
 	MPI_Bcast(&n_nodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&n_edges, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+	Graph mst_result(n_nodes, n_nodes - 1);
 
 	// * Maps <original_node, parent> as a tree (mst_i stands for intermediate minimum spanning tree)
 
@@ -130,7 +139,9 @@ Graph mst_parallel(const Graph &graph)
 
 	// * Adjust edgesPerProcess for the last process.
 	if (id == n_procs - 1)
-		edgesPerProcess = n_edges % edgesPerProcess;
+	{
+		edgesPerProcess = n_edges % edgesPerProcess == 0 ? edgesPerProcess : n_edges % edgesPerProcess;
+	}
 
 	// * Process 0 initializes nSubtrees and broadcast to the others.
 	int nSubtrees = graph.n_nodes;
@@ -166,6 +177,12 @@ Graph mst_parallel(const Graph &graph)
 			}
 		}
 
+		// for (int i = 0; i < n_nodes; i++)
+		// {
+		// 	Edge edge = minimum_edge[i];
+		// 	printf("min_edge i = %d: (%d, %d, %f)\n", i, edge.row, edge.col, edge.val);
+		// }
+
 		Edge *minimum_edge_rcv = new Edge[n_nodes];
 		MPI_Status status;
 
@@ -173,14 +190,19 @@ Graph mst_parallel(const Graph &graph)
 		{
 			if (id % (int)pow(2, k) == pow(2, k - 1))
 			{
-				printf("Id %d sending to %f\n", id, id - pow(2, k - 1));
+				// printf("\nId %d sending to %f\n", id, id - pow(2, k - 1));
 				MPI_Send(minimum_edge, n_nodes, MPI_EDGE, id - pow(2, k - 1), k, MPI_COMM_WORLD);
 			}
 			else if (id % (int)pow(2, k) == 0 && id + pow(2, k - 1) < n_procs)
 			{
-				printf("Id %d receiving from %f\n", id, id + pow(2, k - 1));
+				// printf("\nId %d receiving from %f\n", id, id + pow(2, k - 1));
 				MPI_Recv(minimum_edge_rcv, n_nodes, MPI_EDGE, id + pow(2, k - 1), k, MPI_COMM_WORLD, &status);
 
+				// for (int i = 0; i < n_nodes; i++)
+				// {
+				// 	Edge edge = minimum_edge_rcv[i];
+				// 	printf("min_edge_rcv i = %d: (%d, %d, %f)\n", i, edge.row, edge.col, edge.val);
+				// }
 				merge_minimum_edges(minimum_edge, minimum_edge_rcv, n_nodes);
 			}
 		}
